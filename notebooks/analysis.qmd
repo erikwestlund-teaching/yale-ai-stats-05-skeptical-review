@@ -1,0 +1,88 @@
+---
+title: "Systolic Blood Pressure, Age, and Gender Among Adults"
+---
+
+## Question
+
+How is mean systolic blood pressure associated with age and gender among adults in the Neighborhood Health Survey?
+
+```{r}
+#| message: false
+library(readr)
+library(dplyr)
+library(ggplot2)
+library(broom)
+
+survey <- read_csv(here::here("inputs/raw/neighborhood_health_survey.csv"), show_col_types = FALSE)
+```
+
+## Data
+
+Adults are participants aged 18 and older. Blood pressure was measured only for examined participants, so the analysis keeps adults with a `systolic_mean` value.
+
+```{r}
+adults <- survey |>
+  filter(age_years >= 18, !is.na(systolic_mean)) |>
+  mutate(
+    gender = factor(gender, levels = c("male", "female"), labels = c("Female", "Male")),
+    gender = relevel(gender, ref = "Male")
+  )
+
+n_adults <- sum(survey$age_years >= 18)
+n_analyzed <- nrow(adults)
+```
+
+The survey has `r format(n_adults, big.mark = ",")` adults. Of these, `r format(n_analyzed, big.mark = ",")` have a blood pressure measurement and are included.
+
+## Summary by gender
+
+```{r}
+by_gender <- adults |>
+  group_by(gender) |>
+  summarise(
+    n = n(),
+    mean_age = mean(age_years),
+    mean_systolic = mean(systolic_mean),
+    sd_systolic = sd(systolic_mean)
+  )
+
+by_gender
+```
+
+## Model
+
+A linear regression of systolic blood pressure on age and gender.
+
+```{r}
+fit <- lm(systolic_mean ~ age_years + gender, data = adults)
+
+coefs <- tidy(fit, conf.int = TRUE)
+coefs
+
+age_slope <- coefs$estimate[coefs$term == "age_years"]
+gender_gap <- coefs$estimate[coefs$term == "genderFemale"]
+gender_ci <- coefs[coefs$term == "genderFemale", c("conf.low", "conf.high")]
+```
+
+## Figure
+
+```{r}
+#| message: false
+ggplot(adults, aes(x = age_years, y = systolic_mean, color = gender)) +
+  geom_point(alpha = 0.15, size = 1) +
+  geom_smooth(method = "lm", se = TRUE) +
+  labs(
+    title = "Systolic blood pressure rises with age; women run higher",
+    x = "Age (years)",
+    y = "Systolic blood pressure (mm Hg)",
+    color = NULL
+  ) +
+  theme_minimal(base_size = 13) +
+  theme(legend.position = "bottom")
+```
+
+## Interpretation
+
+Systolic blood pressure is associated with age: each additional year is associated with `r round(age_slope, 2)` mm Hg higher systolic pressure, holding gender constant. Women have higher systolic blood pressure than men at every age, by `r round(gender_gap, 1)` mm Hg on average (95% CI `r round(gender_ci$conf.low, 1)` to `r round(gender_ci$conf.high, 1)`). Both associations are large relative to their uncertainty.
+
+The analysis is unweighted and ignores the survey design, so the estimates describe this sample. The data are simulated for teaching.
