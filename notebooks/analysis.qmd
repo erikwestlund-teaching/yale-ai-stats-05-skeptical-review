@@ -1,10 +1,10 @@
 ---
-title: "Systolic Blood Pressure, Age, and Gender Among Adults"
+title: "Systolic Blood Pressure and Gender Among Adults"
 ---
 
 ## Question
 
-How is mean systolic blood pressure associated with age and gender among adults in the Neighborhood Health Survey?
+Among adults in the Neighborhood Health Survey, is systolic blood pressure associated with gender after accounting for age? The outcome is expressed in standard-deviation units, so the result can be compared with other outcomes on a common scale.
 
 ```{r}
 #| message: false
@@ -18,15 +18,18 @@ survey <- read_csv(here::here("inputs/raw/neighborhood_health_survey.csv"), show
 
 ## Data
 
-Adults are participants aged 18 and older. Blood pressure was measured only for examined participants, so the analysis keeps adults with a `systolic_mean` value.
+Adults are participants aged 18 and older. Blood pressure was measured only for examined participants, so the analysis keeps adults with a `systolic_mean` value. The group sizes are kept for the figure legend, and systolic pressure is standardized to mean 0 and standard deviation 1.
 
 ```{r}
 adults <- survey |>
   filter(age_years >= 18, !is.na(systolic_mean)) |>
+  group_by(gender) |>
   mutate(
-    gender = factor(gender, levels = c("male", "female"), labels = c("Female", "Male")),
-    gender = relevel(gender, ref = "Male")
-  )
+    n_in_group = n(),
+    systolic_z = as.numeric(scale(systolic_mean))
+  ) |>
+  ungroup() |>
+  mutate(gender_label = paste0(gender, " (n = ", format(n_in_group, big.mark = ","), ")"))
 
 n_adults <- sum(survey$age_years >= 18)
 n_analyzed <- nrow(adults)
@@ -34,47 +37,47 @@ n_analyzed <- nrow(adults)
 
 The survey has `r format(n_adults, big.mark = ",")` adults. Of these, `r format(n_analyzed, big.mark = ",")` have a blood pressure measurement and are included.
 
-## Summary by gender
+## Sample by gender
+
+Men and women have a similar age distribution, so age adjustment should change little.
 
 ```{r}
-by_gender <- adults |>
+adults |>
   group_by(gender) |>
   summarise(
     n = n(),
     mean_age = mean(age_years),
-    mean_systolic = mean(systolic_mean),
-    sd_systolic = sd(systolic_mean)
+    sd_age = sd(age_years)
   )
-
-by_gender
 ```
 
 ## Model
 
-A linear regression of systolic blood pressure on age and gender.
+A linear regression of standardized systolic pressure on age and gender. Women are the reference group.
 
 ```{r}
-fit <- lm(systolic_mean ~ age_years + gender, data = adults)
+fit <- lm(systolic_z ~ age_years + gender, data = adults)
 
 coefs <- tidy(fit, conf.int = TRUE)
 coefs
 
-age_slope <- coefs$estimate[coefs$term == "age_years"]
-gender_gap <- coefs$estimate[coefs$term == "genderFemale"]
-gender_ci <- coefs[coefs$term == "genderFemale", c("conf.low", "conf.high")]
+age_per_decade <- 10 * coefs$estimate[coefs$term == "age_years"]
+gender_diff <- coefs$estimate[coefs$term == "gendermale"]
+gender_ci <- coefs[coefs$term == "gendermale", c("conf.low", "conf.high")]
+gender_p <- coefs$p.value[coefs$term == "gendermale"]
 ```
 
 ## Figure
 
 ```{r}
 #| message: false
-ggplot(adults, aes(x = age_years, y = systolic_mean, color = gender)) +
+ggplot(adults, aes(x = age_years, y = systolic_z, color = gender_label)) +
   geom_point(alpha = 0.15, size = 1) +
   geom_smooth(method = "lm", se = TRUE) +
   labs(
-    title = "Systolic blood pressure rises with age; women run higher",
+    title = "Systolic blood pressure rises with age at the same level for men and women",
     x = "Age (years)",
-    y = "Systolic blood pressure (mm Hg)",
+    y = "Systolic blood pressure (SD units)",
     color = NULL
   ) +
   theme_minimal(base_size = 13) +
@@ -83,6 +86,6 @@ ggplot(adults, aes(x = age_years, y = systolic_mean, color = gender)) +
 
 ## Interpretation
 
-Systolic blood pressure is associated with age: each additional year is associated with `r round(age_slope, 2)` mm Hg higher systolic pressure, holding gender constant. Women have higher systolic blood pressure than men at every age, by `r round(gender_gap, 1)` mm Hg on average (95% CI `r round(gender_ci$conf.low, 1)` to `r round(gender_ci$conf.high, 1)`). Both associations are large relative to their uncertainty.
+Systolic blood pressure is strongly associated with age: each additional decade is associated with `r round(age_per_decade, 2)` SD higher systolic pressure, holding gender constant. After accounting for age, men and women do not differ meaningfully in systolic blood pressure. The estimated difference is `r round(gender_diff, 2)` SD (95% CI `r round(gender_ci$conf.low, 2)` to `r round(gender_ci$conf.high, 2)`, p = `r round(gender_p, 2)`).
 
 The analysis is unweighted and ignores the survey design, so the estimates describe this sample. The data are simulated for teaching.
