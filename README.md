@@ -1,4 +1,4 @@
-# Module 8: AI as a Skeptical Reviewer
+# Module 7: AI as a Skeptical Reviewer
 
 Part of the workshop **AI-Powered Coding and Data Analysis**. The prompt is on the course page.
 
