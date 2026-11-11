@@ -1,6 +1,6 @@
 # Module 8: AI as a Skeptical Reviewer
 
-Part of the workshop **AI Tools for Statistical Programming and Analysis**. The prompt is on the course page.
+Part of the workshop **AI-Powered Coding and Data Analysis**. The prompt is on the course page.
 
 This project contains a finished analysis in `notebooks/analysis.qmd`. You'll ask an AI tool to review it.
 
